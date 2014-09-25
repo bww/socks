@@ -41,9 +41,10 @@ A complete example using this package:
 package socks
 
 import (
-  "errors"
+  "io"
   "fmt"
   "net"
+  "errors"
   "strconv"
 )
 
@@ -180,7 +181,7 @@ func sendReceive(conn net.Conn, req []byte, expect int) (resp []byte, err error)
 
 func readAll(conn net.Conn, expect int) (resp []byte, err error) {
   resp = make([]byte, expect)
-  n, err := conn.ReadAll(resp)
+  n, err := io.ReadFull(conn, resp)
   resp = resp[:n]
   return
 }
