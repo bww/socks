@@ -48,34 +48,18 @@ import (
   "strconv"
 )
 
-// Constants to choose which version of SOCKS protocol to use.
-const (
-  SOCKS4 = iota
-  SOCKS4A
-  SOCKS5
-)
-
-// DialSocksProxy returns the dial function to be used in http.Transport object.
 // Argument socksType should be one of SOCKS4, SOCKS4A and SOCKS5.
 // Argument proxy should be in this format "127.0.0.1:1080".
-func DialSocksProxy(socksType int, proxy string) func(string, string) (net.Conn, error) {
-  
-  if socksType == SOCKS5 {
-    return func(_, targetAddr string) (conn net.Conn, err error) {
-      return dialSocks5(proxy, targetAddr)
-    }
-  }
-  
-  // SOCKS4, SOCKS4A
+func DialSocksProxy(proxy string, dialer net.Dialer) func(string, string) (net.Conn, error) {
   return func(_, targetAddr string) (conn net.Conn, err error) {
-    return dialSocks4(socksType, proxy, targetAddr)
+    return dialSocks5(proxy, targetAddr, dialer)
   }
-  
 }
 
-func dialSocks5(proxy, targetAddr string) (conn net.Conn, err error) {
+func dialSocks5(proxy, targetAddr string, dialer net.Dialer) (conn net.Conn, err error) {
+  
   // dial TCP
-  conn, err = net.Dial("tcp", proxy)
+  conn, err = dialer.Dial("tcp", proxy)
   if err != nil {
     return
   }
@@ -117,56 +101,6 @@ func dialSocks5(proxy, targetAddr string) (conn net.Conn, err error) {
     err = errors.New("Can't complete SOCKS5 connection.")
   }
 
-  return
-}
-
-func dialSocks4(socksType int, proxy, targetAddr string) (conn net.Conn, err error) {
-  // dial TCP
-  conn, err = net.Dial("tcp", proxy)
-  if err != nil {
-    return
-  }
-
-  // connection request
-  host, port, err := splitHostPort(targetAddr)
-  if err != nil {
-    return
-  }
-  ip := net.IPv4(0, 0, 0, 1).To4()
-  if socksType == SOCKS4 {
-    ip, err = lookupIP(host)
-    if err != nil {
-      return
-    }
-  }
-  req := []byte{
-    4,                          // version number
-    1,                          // command CONNECT
-    byte(port >> 8),            // higher byte of destination port
-    byte(port),                 // lower byte of destination port (big endian)
-    ip[0], ip[1], ip[2], ip[3], // special invalid IP address to indicate the host name is provided
-    0, // user id is empty, anonymous proxy only
-  }
-  if socksType == SOCKS4A {
-    req = append(req, []byte(host+"\x00")...)
-  }
-
-  resp, err := sendReceive(conn, req, 8)
-  if err != nil {
-    return
-  }
-  switch resp[1] {
-  case 90:
-    // request granted
-  case 91:
-    err = errors.New("Socks connection request rejected or failed.")
-  case 92:
-    err = errors.New("Socks connection request rejected becasue SOCKS server cannot connect to identd on the client.")
-  case 93:
-    err = errors.New("Socks connection request rejected because the client program and identd report different user-ids.")
-  default:
-    err = errors.New("Socks connection request failed, unknown error.")
-  }
   return
 }
 
